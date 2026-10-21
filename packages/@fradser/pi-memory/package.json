@@ -1,0 +1,37 @@
+{
+  "name": "@fradser/pi-memory",
+  "version": "0.2.8",
+  "description": "Native /memory command for pi — auto-memory guidance, instructions menu, and manual consolidation (no skill surface)",
+  "author": "Frad LEE <fradser@gmail.com>",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "memory",
+    "consolidation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FradSer/pi-packages.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "index.ts",
+    "procedures",
+    "extensions",
+    "scripts",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "dependencies": {
+    "@fradser/pi-kit": "0.4.0"
+  }
+}

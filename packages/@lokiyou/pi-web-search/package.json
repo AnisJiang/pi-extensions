@@ -1,0 +1,42 @@
+{
+  "name": "@lokiyou/pi-web-search",
+  "version": "0.2.3",
+  "description": "Simple web search for Pi Coding Agent. Install it, add API keys if needed, and ask normal questions.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "web-search",
+    "search",
+    "fetch"
+  ],
+  "author": "lokiyou",
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "skills",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

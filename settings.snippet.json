@@ -1,0 +1,14 @@
+{
+  "packages": [
+    "npm:@lokiyou/pi-web-search",
+    "npm:pi-cc-extensions",
+    "npm:@ff-labs/pi-fff",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:@fradser/pi-monitor",
+    "npm:@fradser/pi-memory",
+    "npm:@narumitw/pi-goal",
+    "npm:pi-simplify",
+    "npm:pi-context-kit",
+    "npm:@narumitw/pi-btw"
+  ]
+}

@@ -1,0 +1,1 @@
+{"version":3,"file":"git-diff.d.ts","sourceRoot":"","sources":["../src/git-diff.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,iCAAiC,CAAC;AACpE,OAAO,KAAK,EAAE,WAAW,EAAa,eAAe,EAAE,MAAM,YAAY,CAAC;AAuF1E,wBAAsB,eAAe,CACnC,EAAE,EAAE,YAAY,EAChB,GAAG,EAAE,MAAM,EACX,OAAO,EAAE,eAAe,GACvB,OAAO,CAAC,WAAW,EAAE,CAAC,CA2BxB"}

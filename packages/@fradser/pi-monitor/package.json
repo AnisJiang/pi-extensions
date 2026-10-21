@@ -1,0 +1,42 @@
+{
+  "name": "@fradser/pi-monitor",
+  "version": "2.3.1",
+  "description": "Result-contract background monitoring for Pi — capture noisy command output outside model context and expose one structured terminal result",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "monitor",
+    "background",
+    "watch",
+    "logs",
+    "observability",
+    "streaming"
+  ],
+  "author": "Frad LEE <fradser@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FradSer/pi-packages.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "README.md"
+  ],
+  "dependencies": {
+    "@fradser/pi-kit": "0.5.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

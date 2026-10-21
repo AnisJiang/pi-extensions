@@ -1,0 +1,138 @@
+{
+  "agent": "Pi Coding Agent",
+  "sourceNodeModules": "/root/.pi/agent/npm/node_modules",
+  "note": "本清单按本机实际安装的依赖导出；packages/ 为第三方包原样备份（已剔除 node_modules），版权归各上游作者所有。",
+  "count": 10,
+  "plugins": [
+    {
+      "package": "@lokiyou/pi-web-search",
+      "version": "0.2.3",
+      "path": "packages/@lokiyou/pi-web-search",
+      "description": "Simple web search for Pi Coding Agent. Install it, add API keys if needed, and ask normal questions.",
+      "license": "MIT",
+      "upstream": "",
+      "upstreamDirectory": null,
+      "entry": [
+        "./index.ts"
+      ],
+      "files": 4
+    },
+    {
+      "package": "@ff-labs/pi-fff",
+      "version": "0.11.0",
+      "path": "packages/@ff-labs/pi-fff",
+      "description": "pi extension: FFF-powered fuzzy file and content search",
+      "license": "MIT",
+      "upstream": "https://github.com/dmtrKovalenko/fff",
+      "upstreamDirectory": "packages/pi-fff",
+      "entry": [
+        "./src/index.ts"
+      ],
+      "files": 10
+    },
+    {
+      "package": "@juicesharp/rpiv-ask-user-question",
+      "version": "2.13.8",
+      "path": "packages/@juicesharp/rpiv-ask-user-question",
+      "description": "Pi extension. A structured questionnaire the model can put to you when it would otherwise guess, with typed options instead of free-form replies.",
+      "license": "MIT",
+      "upstream": "https://github.com/juicesharp/rpiv-mono",
+      "upstreamDirectory": "packages/rpiv-ask-user-question",
+      "entry": [
+        "./index.ts"
+      ],
+      "files": 60
+    },
+    {
+      "package": "@fradser/pi-monitor",
+      "version": "2.3.1",
+      "path": "packages/@fradser/pi-monitor",
+      "description": "Result-contract background monitoring for Pi — capture noisy command output outside model context and expose one structured terminal result",
+      "license": "MIT",
+      "upstream": "https://github.com/FradSer/pi-packages",
+      "upstreamDirectory": null,
+      "entry": [
+        "./index.ts"
+      ],
+      "files": 7
+    },
+    {
+      "package": "@fradser/pi-memory",
+      "version": "0.2.8",
+      "path": "packages/@fradser/pi-memory",
+      "description": "Native /memory command for pi — auto-memory guidance, instructions menu, and manual consolidation (no skill surface)",
+      "license": "MIT",
+      "upstream": "https://github.com/FradSer/pi-packages",
+      "upstreamDirectory": null,
+      "entry": [
+        "./index.ts"
+      ],
+      "files": 10
+    },
+    {
+      "package": "@narumitw/pi-goal",
+      "version": "0.54.11",
+      "path": "packages/@narumitw/pi-goal",
+      "description": "Pi extension for autonomous single-objective /goal completion.",
+      "license": "MIT",
+      "upstream": "https://github.com/narumiruna/pi-extensions",
+      "upstreamDirectory": "packages/pi-goal",
+      "entry": [
+        "./dist/index.ts"
+      ],
+      "files": 37
+    },
+    {
+      "package": "@narumitw/pi-btw",
+      "version": "0.62.0",
+      "path": "packages/@narumitw/pi-btw",
+      "description": "Pi extension that adds a /btw side-question command.",
+      "license": "MIT",
+      "upstream": "https://github.com/narumiruna/pi-extensions",
+      "upstreamDirectory": "packages/pi-btw",
+      "entry": [
+        "./dist/index.ts"
+      ],
+      "files": 26
+    },
+    {
+      "package": "pi-context-kit",
+      "version": "0.2.1",
+      "path": "packages/pi-context-kit",
+      "description": "Context maintenance for Pi: stale read replacement, pruning, handoff compaction with background notes, and recall.",
+      "license": "MIT",
+      "upstream": "https://github.com/HugoLopes45/pi-context-kit",
+      "upstreamDirectory": null,
+      "entry": [
+        "./extensions/index.ts"
+      ],
+      "files": 17
+    },
+    {
+      "package": "pi-simplify",
+      "version": "0.2.3",
+      "path": "packages/pi-simplify",
+      "description": "A Pi extension that reviews recently changed code for clarity, consistency, and maintainability.",
+      "license": "MIT",
+      "upstream": "https://github.com/MattDevy/pi-extensions",
+      "upstreamDirectory": "packages/pi-simplify",
+      "entry": [
+        "dist/index.js"
+      ],
+      "files": 27
+    },
+    {
+      "package": "pi-cc-extensions",
+      "version": "1.0.2",
+      "path": "packages/pi-cc-extensions",
+      "description": "Claude Code-style TUI output with some personal touches and handy utilities.",
+      "license": "MIT",
+      "upstream": "https://github.com/minuque/pi-cc-extensions",
+      "upstreamDirectory": null,
+      "entry": [
+        "./extensions/index.ts"
+      ],
+      "files": 76
+    }
+  ]
+}
