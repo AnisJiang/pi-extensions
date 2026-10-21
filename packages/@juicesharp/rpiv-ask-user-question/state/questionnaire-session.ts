@@ -1,15 +1,15 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Editor, OverlayHandle, TUI } from "@earendil-works/pi-tui";
-import { COLLAPSE_KEY_OFF, formatKeySpecForDisplay } from "../config.js";
-import type { QuestionData, QuestionnaireResult, QuestionParams } from "../tool/types.js";
-import type { WrappingSelectItem } from "../view/components/wrapping-select.js";
-import { COLLAPSED_HINT_TEMPLATE, HINT_PART_CANCEL, KEY_PLACEHOLDER } from "../view/dialog-builder.js";
-import type { QuestionnairePropsAdapter } from "../view/props-adapter.js";
-import { buildQuestionnaire, type QuestionnaireBuilt } from "./build-questionnaire.js";
-import { t } from "./i18n-bridge.js";
-import { type QuestionnaireAction, routeKey } from "./key-router.js";
-import type { QuestionnaireRuntime, QuestionnaireState } from "./state.js";
-import { type ApplyContext, type Effect, reduce } from "./state-reducer.js";
+import { COLLAPSE_KEY_OFF, formatKeySpecForDisplay } from "../config.ts";
+import type { QuestionData, QuestionnaireResult, QuestionParams } from "../tool/types.ts";
+import type { WrappingSelectItem } from "../view/components/wrapping-select.ts";
+import { COLLAPSED_HINT_TEMPLATE, HINT_PART_CANCEL, KEY_PLACEHOLDER } from "../view/dialog-builder.ts";
+import type { QuestionnairePropsAdapter } from "../view/props-adapter.ts";
+import { buildQuestionnaire, type QuestionnaireBuilt } from "./build-questionnaire.ts";
+import { t } from "./i18n-bridge.ts";
+import { type QuestionnaireAction, routeKey } from "./key-router.ts";
+import type { QuestionnaireRuntime, QuestionnaireState } from "./state.ts";
+import { type ApplyContext, type Effect, reduce } from "./state-reducer.ts";
 
 export interface QuestionnaireSessionConfig {
 	tui: TUI;

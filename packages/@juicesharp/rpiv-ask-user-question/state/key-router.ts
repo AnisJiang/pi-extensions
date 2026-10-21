@@ -1,7 +1,7 @@
 import { Key, matchesKey } from "@earendil-works/pi-tui";
-import type { QuestionAnswer } from "../tool/types.js";
-import { ROW_INTENT_META } from "./row-intent.js";
-import type { QuestionnaireRuntime, QuestionnaireState } from "./state.js";
+import type { QuestionAnswer } from "../tool/types.ts";
+import { ROW_INTENT_META } from "./row-intent.ts";
+import type { QuestionnaireRuntime, QuestionnaireState } from "./state.ts";
 
 const KEYBIND_UP = "tui.select.up";
 const KEYBIND_DOWN = "tui.select.down";
@@ -80,12 +80,15 @@ function buildSingleSelectAnswer(state: QuestionnaireState, runtime: Questionnai
 	const item = runtime.currentItem;
 
 	if (state.inputMode) {
+		// A blank draft is not an answer (#301): Enter stays on the row instead of recording
+		// an empty custom answer. Skipping a question is the Submit tab's `unanswered:` path.
 		const label = runtime.inputBuffer;
+		if (label.trim().length === 0) return null;
 		return {
 			questionIndex: state.currentTab,
 			question: q.question,
 			kind: "custom",
-			answer: label.length > 0 ? label : null,
+			answer: label,
 		};
 	}
 	if (!item) return null;

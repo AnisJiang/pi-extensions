@@ -32,7 +32,7 @@
     },
     {
       "package": "@juicesharp/rpiv-ask-user-question",
-      "version": "2.13.8",
+      "version": "2.13.9",
       "path": "packages/@juicesharp/rpiv-ask-user-question",
       "description": "Pi extension. A structured questionnaire the model can put to you when it would otherwise guess, with typed options instead of free-form replies.",
       "license": "MIT",
@@ -41,7 +41,7 @@
       "entry": [
         "./index.ts"
       ],
-      "files": 60
+      "files": 63
     },
     {
       "package": "@fradser/pi-monitor",
@@ -71,7 +71,7 @@
     },
     {
       "package": "@narumitw/pi-goal",
-      "version": "0.54.11",
+      "version": "0.54.13",
       "path": "packages/@narumitw/pi-goal",
       "description": "Pi extension for autonomous single-objective /goal completion.",
       "license": "MIT",
@@ -80,7 +80,7 @@
       "entry": [
         "./dist/index.ts"
       ],
-      "files": 37
+      "files": 41
     },
     {
       "package": "@narumitw/pi-btw",
@@ -123,7 +123,7 @@
     },
     {
       "package": "pi-cc-extensions",
-      "version": "1.0.2",
+      "version": "1.0.8",
       "path": "packages/pi-cc-extensions",
       "description": "Claude Code-style TUI output with some personal touches and handy utilities.",
       "license": "MIT",
@@ -132,7 +132,7 @@
       "entry": [
         "./extensions/index.ts"
       ],
-      "files": 76
+      "files": 77
     }
   ]
 }

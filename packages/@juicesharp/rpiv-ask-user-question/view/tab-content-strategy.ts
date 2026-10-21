@@ -1,12 +1,12 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { type Component, Container, type Editor, Spacer, Text, truncateToWidth } from "@earendil-works/pi-tui";
-import { COLLAPSE_KEY_OFF, formatKeySpecForDisplay } from "../config.js";
-import { t } from "../state/i18n-bridge.js";
-import { selectSavedNote } from "../state/selectors/derivations.js";
-import { formatAnswerScalar } from "../tool/format-answer.js";
-import type { QuestionData } from "../tool/types.js";
-import type { PreviewPane, PreviewPaneProps } from "./components/preview/preview-pane.js";
-import type { DialogState } from "./dialog-builder.js";
+import { COLLAPSE_KEY_OFF, formatKeySpecForDisplay } from "../config.ts";
+import { t } from "../state/i18n-bridge.ts";
+import { selectSavedNote } from "../state/selectors/derivations.ts";
+import { formatAnswerScalar } from "../tool/format-answer.ts";
+import type { QuestionData } from "../tool/types.ts";
+import type { PreviewPane, PreviewPaneProps } from "./components/preview/preview-pane.ts";
+import type { DialogState } from "./dialog-builder.ts";
 import {
 	HINT_PART_CANCEL,
 	HINT_PART_CLEAR,
@@ -21,9 +21,9 @@ import {
 	KEY_PLACEHOLDER,
 	READY_PROMPT,
 	REVIEW_HEADING,
-} from "./dialog-copy.js";
-import type { StatefulView } from "./stateful-view.js";
-import type { TabComponents } from "./tab-components.js";
+} from "./dialog-copy.ts";
+import type { StatefulView } from "./stateful-view.ts";
+import type { TabComponents } from "./tab-components.ts";
 
 const NOTES_HEADER = "Notes:";
 const GLOBAL_NOTES_HEADER = "Global note:";

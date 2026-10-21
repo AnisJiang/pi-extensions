@@ -1,13 +1,13 @@
 import { DynamicBorder, type Theme } from "@earendil-works/pi-coding-agent";
 import { type Component, Container, type Editor, Spacer } from "@earendil-works/pi-tui";
-import type { QuestionnaireState } from "../state/state.js";
-import type { QuestionData } from "../tool/types.js";
-import type { PreviewPaneProps } from "./components/preview/preview-pane.js";
-import type { TabBar } from "./components/tab-bar.js";
-import { computeScrollStart, decorateOverflow } from "./scroll-window.js";
-import type { StatefulView } from "./stateful-view.js";
-import type { TabComponents } from "./tab-components.js";
-import { QuestionTabStrategy, SubmitTabStrategy, type TabContentStrategy } from "./tab-content-strategy.js";
+import type { QuestionnaireState } from "../state/state.ts";
+import type { QuestionData } from "../tool/types.ts";
+import type { PreviewPaneProps } from "./components/preview/preview-pane.ts";
+import type { TabBar } from "./components/tab-bar.ts";
+import { computeScrollStart, decorateOverflow } from "./scroll-window.ts";
+import type { StatefulView } from "./stateful-view.ts";
+import type { TabComponents } from "./tab-components.ts";
+import { QuestionTabStrategy, SubmitTabStrategy, type TabContentStrategy } from "./tab-content-strategy.ts";
 
 export {
 	COLLAPSED_HINT_TEMPLATE,
@@ -28,7 +28,7 @@ export {
 	KEY_PLACEHOLDER,
 	READY_PROMPT,
 	REVIEW_HEADING,
-} from "./dialog-copy.js";
+} from "./dialog-copy.ts";
 
 /**
  * Rows the scroll window must keep for the body before the heading (header badge +

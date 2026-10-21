@@ -28,7 +28,7 @@ Run `/reload` after installation.
 | Feature                     | Description                                                                                                                                  | Entry point                                     |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | Claude Code UI              | Tool summaries, expand/collapse, rich edit/write diffs, and `on` / `compact` / `off` modes                                                   | `/ccstyle`                                      |
-| Markdown enhancements       | Mermaid diagrams, admonitions, URL linking, and more                                                                                         | Automatic                                       |
+| Markdown enhancements       | Mermaid dialects and circled-number conversion                                                                                               | Automatic; turn off with `enableMarkdownEnhance: false` |
 | Fullscreen mode             | Tool card/group expand and collapse on click, previews, hover highlight, and a back-to-bottom button                                         | `TUIMODE=fullscreen` or `--tui-mode fullscreen` |
 | Settings panel              | `Style / Features / UI / Diff / Thinking / Footer` tabs                                                                                      | `/ccstyle`                                      |
 | Context inspection          | Usage breakdown and previews for the system prompt, memory, skills, tools definition, and messages                                           | `/context`                                      |
@@ -45,57 +45,61 @@ Renderer snapshots for `on` / `compact` modes: [default](./docs/tool-render-exam
 ```jsonc
 {
   // style
-  "mode": "on", // on / compact / off
-  "excludeRenderers": [], // tools keeping the native renderer; Agent always keeps its dedicated renderer
+  "mode": "on",                            // on / compact / off
+  "excludeRenderers": [],                  // tools keeping the native renderer; Agent always keeps its dedicated renderer
 
   // features
-  "enableSessionReference": true, // @ session references
-  "enableSubagentAutocomplete": true, // @subagent:[name] completion and delegation hints
-  "enableContextCommand": true, // /context usage check
-  "enableAgentSummary": true, // per-turn tool summary
-  "enableWorkingMessage": true, // Working... bottom token/elapsed
-  "enableAliases": true, // /clear, /exit aliases
+  "enableSessionReference": true,          // @ session references
+  "enableSubagentAutocomplete": true,      // @subagent:[name] completion and delegation hints
+  "enableContextCommand": true,            // /context usage check
+  "enableAgentSummary": true,              // per-turn tool summary
+  "enableWorkingMessage": true,            // Working... bottom token/elapsed
+  "enableAliases": true,                   // /clear, /exit aliases
+  "enableMarkdownEnhance": true,             // markdown pass: Mermaid dialects and circled-number conversion; false hands it to other extensions
+  "enableEditorPrefix": true,              // editor ❯ prefix
 
   // ui
-  "expandedInputMaxLines": 5, // expanded tool Input lines; overflow shows a footer hint
-  "expandedOutputMaxLines": 10, // expanded tool Output lines; overflow shows a footer hint
-  "expandedPreviewMaxLines": 40, // max lines for expanded TaskList bodies (expanded diffs always show all)
-  "expandedCardBackground": "userMessageBg", // expanded card background slot: userMessageBg (same as user prompts) / toolPendingBg (neutral) etc.
-  "toolLabelClip": 0, // tool summary path/command clip length; 0 = fit width
-  "showStartupHeader": true, // startup header (logo + tips) toggle
-  "stickyUserMessage": true, // fullscreen: pin a user message's first line once it scrolls off the top edge, until the next one takes over
+  "expandedInputMaxLines": 5,              // expanded tool Input lines; overflow shows a footer hint
+  "expandedOutputMaxLines": 10,            // expanded tool Output lines; overflow shows a footer hint
+  "expandedPreviewMaxLines": 40,           // max lines for expanded TaskList bodies (expanded diffs always show all)
+  "toolLabelClip": 0,                      // tool summary path/command clip length; 0 = fit width
+  "showStartupHeader": true,               // startup header (logo + tips) toggle
+  "stickyUserMessage": true,               // fullscreen: pin a user message's first line once it scrolls off the top edge, until the next one takes over
+  "scrollButtonMode": "dock",              // fullscreen: extension dock row / native Pi floating overlay
 
   // diff
-  "diffViewMode": "auto", // layout: auto / split / unified
-  "diffIndicatorMode": "bars", // change indicators: bars / classic / none
-  "diffSplitMinWidth": 120, // min terminal width for side-by-side columns
-  "editDiffCollapsedLines": 24, // edit collapse lines; 0 = change-count summary only
-  "writeDiffCollapsedLines": 0, // write collapse lines; 0 = creation summary only
-  "diffWordWrap": true, // wrap long diff lines
+  "diffViewMode": "auto",                  // layout: auto / split / unified
+  "diffIndicatorMode": "bars",             // change indicators: bars / classic / none
+  "diffSplitMinWidth": 120,                // min terminal width for side-by-side columns
+  "editDiffCollapsedLines": 24,            // edit collapse lines; 0 = change-count summary only
+  "writeDiffCollapsedLines": 0,            // write collapse lines; 0 = creation summary only
+  "diffWordWrap": true,                    // wrap long diff lines
 
   // thinking
   "useSummaryTitlesAsThinkingTitle": true, // use latest summary as thinking title
-  "previewLines": 3, // preview lines; 0 hides
-  "animationIntervalMs": 90, // title animation interval (ms)
-  "dimThinkingText": false, // dim thinking body text
+  "previewLines": 3,                       // preview lines; 0 hides
+  "animationIntervalMs": 90,               // title animation interval (ms)
 
   // footer
-  "enableCustomFooter": true, // custom status bar
-  "footerTokenRate": true, // output rate chip; false hides it
-  "footerTokenRateMode": "average", // average: whole-prompt avg; live: trailing 1s rate
-  "footerCurrency": "USD", // display currency for the footer cost
-  "footerCurrencyRate": null, // display units per 1 cost unit; null changes the symbol only
-  "footerNerdIcons": true, // Nerd Font glyphs for git/cache; false = plain text
-  "footerGitStatsMode": "working", // working (default): uncommitted; branch: cumulative net changes
-  "footerHiddenKeys": [], // hidden plugin chip keys
-  "footerLine1Keys": ["pi-usage"], // line1 plugin chip order; pi-usage is shown by default, data from @narumitw/pi-usage
-  "footerLine2Keys": [], // line2 plugin chip order (after cwd/git)
-  "footerLine3Keys": [], // line3 overflow slot; painted only when a chip is visible
+  "enableCustomFooter": true,              // custom status bar
+  "footerTokenRate": true,                 // output rate chip; false hides it
+  "footerTokenRateMode": "average",        // average: whole-prompt avg; live: trailing 1s rate
+  "footerTokenRateTtft": true,             // append TTFT to the rate chip; false shows tok/s only
+  "footerCurrency": "USD",                 // display currency for the footer cost
+  "footerCurrencyRate": null,              // display units per 1 cost unit; null changes the symbol only
+  "footerNerdIcons": true,                 // Nerd Font glyphs for git/cache; false = plain text
+  "footerGitStatsMode": "working",         // working (default): uncommitted; branch: cumulative net changes
+  "footerHiddenKeys": [],                  // hidden chip keys
+  "footerLine1Keys": ["model", "context", "cache", "rate", "cost", "pi-usage"], // chip order per line; builtins and plugins share one layout
+  "footerLine2Keys": ["cwd", "git"],        // cwd: directory and session; git: branch and changes. Either can move to any line
+  "footerLine3Keys": [],                   // painted only when a chip is visible
 }
 ```
 
 > [!TIP]
 > **Fullscreen**: click `click to show more` to expand tool cards, thinking, Skill, and compact summaries. An expanded diff always shows every line; when expanded Input/Output exceeds the line cap, the footer `… +N more lines · click to show more` opens a full preview. Click to collapse.
+>
+> Both `scrollButtonMode` values show the same `Back to bottom` / `N new message(s)` text: `dock` draws it in a dedicated row, `native` in Pi’s floating overlay.
 
 > [!NOTE]
 > **Mermaid rendering**: set `markdown.mermaid` to `final` via `~/.pi/agent/settings.json` or the Mermaid diagrams option in `/settings`. Default `streaming` redraws per frame; `final` renders once at completion.
@@ -114,11 +118,11 @@ pi -e .              # one run, does not edit settings.json
 
 ## Recommended companions
 
-| Extension                | Purpose                                                     |
-| ------------------------ | ----------------------------------------------------------- |
-| `npm:@ff-labs/pi-fff`    | FFF-powered fuzzy file and content search (fffind / ffgrep) |
-| `npm:pi-web-access`      | Web search, URL fetching, GitHub cloning, PDF/video parsing |
-| `npm:@narumitw/pi-usage` | Current-account usage for Codex / Copilot / OpenRouter      |
+| Extension                                | Purpose                                                     |
+| ---------------------------------------- | ----------------------------------------------------------- |
+| `npm:pi-web-access`                      | Web search, URL fetching, GitHub cloning, PDF/video parsing |
+| `npm:@narumitw/pi-usage`                 | Current-account usage for Codex / Copilot / OpenRouter      |
+| `npm:@juicesharp/rpiv-ask-user-question` | Multiple-choice questionnaire the model can ask you         |
 
 ## Credits
 

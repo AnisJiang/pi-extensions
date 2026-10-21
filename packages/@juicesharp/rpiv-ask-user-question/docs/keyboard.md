@@ -47,7 +47,9 @@ squeezed into the narrow options column. `Shift+Enter` inserts a line break. Ver
 arrows move between lines and return to row navigation at the draft's top and bottom.
 The draft replaces the static row label while you browse other options and is isolated
 per question. `Ctrl+G` sends it through Pi's configured external editor. `Ctrl+U` clears
-it, while `Esc` cancels the questionnaire.
+it, while `Esc` cancels the questionnaire. In a single-select question, `Enter` on an empty
+or blank draft does nothing: a blank custom answer is never recorded. To leave a question
+unanswered, move on and submit; the model is told which questions were left blank.
 
 On a single-select question, confirming the input produces `kind: "custom"`. On a
 multi-select question, the result uses `kind: "multi"`: `selected` contains checked

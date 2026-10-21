@@ -1,8 +1,8 @@
-import type { QuestionAnswer, QuestionData, QuestionnaireResult } from "../tool/types.js";
-import type { WrappingSelectItem } from "../view/components/wrapping-select.js";
-import type { QuestionnaireAction } from "./key-router.js";
-import { ROW_INTENT_META } from "./row-intent.js";
-import type { QuestionnaireState } from "./state.js";
+import type { QuestionAnswer, QuestionData, QuestionnaireResult } from "../tool/types.ts";
+import type { WrappingSelectItem } from "../view/components/wrapping-select.ts";
+import type { QuestionnaireAction } from "./key-router.ts";
+import { ROW_INTENT_META } from "./row-intent.ts";
+import type { QuestionnaireState } from "./state.ts";
 
 /** Session-lifetime constants. No live-component reads — peripheral values live on canonical state. */
 export interface ApplyContext {

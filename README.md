@@ -62,14 +62,14 @@ pi install ./packages/@ff-labs/pi-fff
 |---|------|------|----------|----------|
 | 1 | `@lokiyou/pi-web-search` | 0.2.3 | 联网搜索 + 读网页 | 直接提问 |
 | 2 | `@ff-labs/pi-fff` | 0.11.0 | 用 Rust 加速的文件搜索/内容搜索 | `fffind` / `ffgrep` / `@` |
-| 3 | `@juicesharp/rpiv-ask-user-question` | 2.13.8 | 让模型弹选择题问你，而不是瞎猜 | `ask_user_question` |
+| 3 | `@juicesharp/rpiv-ask-user-question` | 2.13.9 | 让模型弹选择题问你，而不是瞎猜 | `ask_user_question` |
 | 4 | `@fradser/pi-monitor` | 2.3.1 | 后台跑长命令，只在出结果时叫你 | `monitor_start` |
 | 5 | `@fradser/pi-memory` | 0.2.8 | 跨会话的项目记忆，可自动整理 | `/memory`、`/consolidate` |
-| 6 | `@narumitw/pi-goal` | 0.54.11 | 给一个目标，它自己一轮轮干到底 | `/goal` |
+| 6 | `@narumitw/pi-goal` | 0.54.13 | 给一个目标，它自己一轮轮干到底 | `/goal` |
 | 7 | `@narumitw/pi-btw` | 0.62.0 | 开个"顺便问一下"的侧线程，不弄脏主对话 | `/btw` |
 | 8 | `pi-context-kit` | 0.2.1 | 自动瘦身上下文，剪掉的东西还能捞回来 | 自动 + `recall` |
 | 9 | `pi-simplify` | 0.2.3 | 只审查你刚改的代码，顺手简化 | `/simplify` |
-| 10 | `pi-cc-extensions` | 1.0.2 | Claude Code 风格的界面、状态栏、上下文查看 | `/ccstyle`、`/context` |
+| 10 | `pi-cc-extensions` | 1.0.8 | Claude Code 风格的界面、状态栏、上下文查看 | `/ccstyle`、`/context` |
 
 ---
 
@@ -270,7 +270,7 @@ pi install ./packages/@ff-labs/pi-fff
 | 功能 | 说明 | 入口 |
 |------|------|------|
 | 工具卡片 | 每次工具调用折成一张卡，可展开看完整输入/输出；文件改动直接显示 diff | `/ccstyle` 切换 `on` / `compact` / `off` |
-| 状态栏 | 一行显示模型、上下文占用、缓存命中、本次花费、git 分支，接了 `@narumitw/pi-usage` 还能看额度 | 自动 |
+| 状态栏 | 一行显示模型、上下文占用、缓存命中、本次花费、输出速率（tok/s + TTFT）、git 分支，接了 `@narumitw/pi-usage` 还能看额度 | 自动 |
 | 上下文检查 | 看当前上下文被谁占满了，并预览 System prompt、记忆、Skills、工具定义 | `/context` |
 | 引用历史 | 用 `@` 引用以前的会话或子代理的有效上下文 | `@` |
 | Markdown 增强 | Mermaid 图、提示框、链接可点 | 自动 |

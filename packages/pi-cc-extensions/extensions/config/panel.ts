@@ -4,7 +4,7 @@
  * 渲染副作用（applyStyleMode / refreshCurrentTranscript）由 renderer 经
  * CcstylePanelHooks 注入，避免 config → renderer 循环依赖。
  */
-import { getSettingsListTheme, type ThemeBg } from "@earendil-works/pi-coding-agent";
+import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { Input, SettingsList, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { CompactThinkingController } from "../feature/compact-thinking.ts";
 import {
@@ -28,6 +28,7 @@ import {
 	toggleFooterKeyHidden,
 	type FooterChipLayout,
 } from "../feature/shell/footer-layout.ts";
+import { applyPromptEditor, clearPromptEditor } from "../feature/shell/prompt-editor.ts";
 import { applyStartupHeader, clearStartupHeader } from "../feature/shell/startup-header.ts";
 import type { ToolGroupingHooks } from "../renderer/tool/grouping.ts";
 import {
@@ -38,7 +39,6 @@ import {
 	DIFF_SPLIT_MIN_WIDTH_VALUES,
 	DIFF_VIEW_MODES,
 	EXCLUDE_RENDERER_CANDIDATES,
-	EXPANDED_CARD_BACKGROUND_SLOTS,
 	EXPANDED_INPUT_MAX_LINES_VALUES,
 	EXPANDED_OUTPUT_MAX_LINES_VALUES,
 	EXPANDED_PREVIEW_MAX_LINES_VALUES,
@@ -49,6 +49,7 @@ import {
 	pickPositiveInt,
 	pickPositiveNumber,
 	pickToolLabelClip,
+	SCROLL_BUTTON_MODES,
 	THINKING_ANIMATION_INTERVAL_VALUES,
 	THINKING_PREVIEW_LINES_VALUES,
 	TOOL_LABEL_CLIP_VALUES,
@@ -60,6 +61,7 @@ import {
 	type DiffViewMode,
 	type FooterGitStatsMode,
 	type FooterTokenRateMode,
+	type ScrollButtonMode,
 } from "./config.ts";
 
 /** renderer 注入的渲染副作用，面板自身不触碰渲染状态。 */
@@ -86,7 +88,7 @@ function excludeRenderersDescription(names: readonly string[]): string {
 
 function customFooterDescription(enabled: boolean): string {
 	if (!enabled) return "Pi native footer restored. Chip layout below still applies when turned on.";
-	return "Custom status bar with model, context, cache, cost, git, and plugin chips.";
+	return "Custom status bar. Model, context, cache, rate, cost, cwd, git, and plugin chips share one layout.";
 }
 
 function footerTokenRateDescription(enabled: boolean): string {
@@ -101,6 +103,12 @@ function footerTokenRateModeDescription(mode: FooterTokenRateMode): string {
 		: "Average over the whole user prompt (avg), including tool waits. Stays until the next prompt.";
 }
 
+function footerTokenRateTtftDescription(enabled: boolean): string {
+	return enabled
+		? "Append time to first token, e.g. (TTFT: 812ms) or (TTFT: 1.2s). Turn off to show the rate only."
+		: "Time to first token hidden. The rate chip shows tok/s only.";
+}
+
 function footerGitStatsDescription(mode: FooterGitStatsMode): string {
 	return mode === "branch"
 		? "Net changes since the merge base, including uncommitted edits. Base: origin/HEAD, then local main/master. Untracked files excluded; unavailable stats hidden."
@@ -108,7 +116,7 @@ function footerGitStatsDescription(mode: FooterGitStatsMode): string {
 }
 
 function pluginChipsDescription(): string {
-	return `Arrange plugin chips: ${formatFooterChipSummary(config)}. Enter to edit.`;
+	return `Arrange footer chips: ${formatFooterChipSummary(config)}. Enter to edit.`;
 }
 
 function footerLayoutFromConfig(): FooterChipLayout {
@@ -226,14 +234,6 @@ function diffIndicatorDescription(mode: DiffIndicatorMode): string {
 	if (mode === "classic") return "Classic +/- gutters on changed lines.";
 	if (mode === "none") return "No change indicators; rely on color alone.";
 	return "Vertical bar indicators on changed lines (default).";
-}
-
-function expandedCardBackgroundDescription(slot: ThemeBg): string {
-	if (slot === "userMessageBg") {
-		return "Expanded cards share the user message background. Pick another slot to tell them apart.";
-	}
-	if (slot === "toolPendingBg") return "Expanded cards use the theme's neutral tool background.";
-	return `Expanded cards use the theme's ${slot} background.`;
 }
 
 /** 额外功能开关项：on/off 二值，描述随状态切换；切换后需重启生效。 */
@@ -559,13 +559,6 @@ export async function showCcstylePanel(
 			submenu: (_current: string, closeSubmenu: (selected?: string) => void) =>
 				buildNumberInputSubmenu(theme, expandedMaxSetting, closeSubmenu),
 		};
-		const expandedCardBgSetting = {
-			id: "expandedCardBackground",
-			label: "Expanded card bg",
-			description: expandedCardBackgroundDescription(config.expandedCardBackground),
-			currentValue: config.expandedCardBackground,
-			values: [...EXPANDED_CARD_BACKGROUND_SLOTS],
-		};
 		const thinkingTitleSetting = {
 			id: "useSummaryTitlesAsThinkingTitle",
 			label: "Summary title",
@@ -591,15 +584,6 @@ export async function showCcstylePanel(
 			submenu: (_current: string, closeSubmenu: (selected?: string) => void) =>
 				buildNumberInputSubmenu(theme, thinkingAnimationSetting, closeSubmenu),
 		};
-		const thinkingDimSetting = {
-			id: "dimThinkingText",
-			label: "Dim thinking text",
-			description: config.dimThinkingText
-				? "Thinking text uses the theme's dim color."
-				: "Keep the default thinking text color.",
-			currentValue: config.dimThinkingText ? "on" : "off",
-			values: ["on", "off"],
-		};
 		const startupHeaderSetting = {
 			id: "showStartupHeader",
 			label: "Startup header",
@@ -617,6 +601,16 @@ export async function showCcstylePanel(
 				: "User messages scroll normally.",
 			currentValue: config.stickyUserMessage ? "on" : "off",
 			values: ["on", "off"],
+		};
+		const scrollButtonSetting = {
+			id: "scrollButtonMode",
+			label: "Scroll button mode",
+			description:
+				config.scrollButtonMode === "dock"
+					? "Fullscreen: show the extension's dedicated Back to bottom row."
+					: "Fullscreen: show the same Back to bottom text in Pi's native floating overlay.",
+			currentValue: config.scrollButtonMode,
+			values: [...SCROLL_BUTTON_MODES],
 		};
 
 		// 额外功能开关：注册于扩展加载期，切换后需重启（/reload）生效。
@@ -661,6 +655,13 @@ export async function showCcstylePanel(
 			"/clear and /exit aliases enabled. Next restart applies.",
 			"Aliases disabled.",
 			config.enableAliases,
+		);
+		const markdownEnhanceToggle = featureToggleSetting(
+			"enableMarkdownEnhance",
+			"Markdown enhance",
+			"Mermaid dialects and circled-number conversion. Next restart applies.",
+			"Markdown enhancements off; another extension can own the markdown pass.",
+			config.enableMarkdownEnhance,
 		);
 		const footerCurrencySetting = {
 			id: "footerCurrency",
@@ -730,6 +731,15 @@ export async function showCcstylePanel(
 			currentValue: config.footerNerdIcons ? "on" : "off",
 			values: ["on", "off"],
 		};
+		const editorPrefixSetting = {
+			id: "enableEditorPrefix",
+			label: "Editor prefix",
+			description: config.enableEditorPrefix
+				? "Show ❯ before the input line; color follows thinking level / bash mode."
+				: "Plain input line, no ❯ glyph.",
+			currentValue: config.enableEditorPrefix ? "on" : "off",
+			values: ["on", "off"],
+		};
 		const customFooterSetting = {
 			id: "enableCustomFooter",
 			label: "Status bar",
@@ -758,9 +768,16 @@ export async function showCcstylePanel(
 			currentValue: config.footerTokenRateMode,
 			values: FOOTER_TOKEN_RATE_MODES,
 		};
+		const footerTokenRateTtftSetting = {
+			id: "footerTokenRateTtft",
+			label: "Token rate TTFT",
+			description: footerTokenRateTtftDescription(config.footerTokenRateTtft),
+			currentValue: config.footerTokenRateTtft ? "on" : "off",
+			values: ["on", "off"],
+		};
 		const pluginChipsSetting = {
 			id: "footerPluginChips",
-			label: "Plugin chips",
+			label: "Footer chips",
 			description: pluginChipsDescription(),
 			currentValue: formatFooterChipSummary(config),
 			submenu: (_current: string, closeSubmenu: (selected?: string) => void) => {
@@ -788,6 +805,7 @@ export async function showCcstylePanel(
 			enableAgentSummary: agentSummaryToggle,
 			enableWorkingMessage: workingMessageToggle,
 			enableAliases: aliasesToggle,
+			enableMarkdownEnhance: markdownEnhanceToggle,
 		};
 
 		const onSettingChange = (id: string, value: string) => {
@@ -844,6 +862,26 @@ export async function showCcstylePanel(
 				footerTokenRateModeSetting.description = footerTokenRateModeDescription(
 					config.footerTokenRateMode,
 				);
+				ctx.ui.notify(`Updated ${id}: ${value}`, "info");
+				return;
+			}
+			if (id === "footerTokenRateTtft") {
+				const enabled = value === "on";
+				updateConfig({ footerTokenRateTtft: enabled });
+				footerTokenRateTtftSetting.currentValue = enabled ? "on" : "off";
+				footerTokenRateTtftSetting.description = footerTokenRateTtftDescription(enabled);
+				ctx.ui.notify(`Updated ${id}: ${value}`, "info");
+				return;
+			}
+			if (id === "enableEditorPrefix") {
+				const enabled = value === "on";
+				updateConfig({ enableEditorPrefix: enabled });
+				editorPrefixSetting.currentValue = enabled ? "on" : "off";
+				editorPrefixSetting.description = enabled
+					? "Show ❯ before the input line; color follows thinking level / bash mode."
+					: "Plain input line, no ❯ glyph.";
+				if (enabled) applyPromptEditor(ctx);
+				else clearPromptEditor(ctx);
 				ctx.ui.notify(`Updated ${id}: ${value}`, "info");
 				return;
 			}
@@ -957,12 +995,6 @@ export async function showCcstylePanel(
 					});
 					expandedMaxSetting.currentValue = String(config.expandedPreviewMaxLines);
 					break;
-				case "expandedCardBackground":
-					updateConfig({ expandedCardBackground: value as ThemeBg });
-					expandedCardBgSetting.description = expandedCardBackgroundDescription(
-						config.expandedCardBackground,
-					);
-					break;
 				case "useSummaryTitlesAsThinkingTitle":
 					updateConfig({ useSummaryTitlesAsThinkingTitle: value === "on" });
 					break;
@@ -976,17 +1008,19 @@ export async function showCcstylePanel(
 					});
 					thinkingAnimationSetting.currentValue = String(config.animationIntervalMs);
 					break;
-				case "dimThinkingText":
-					updateConfig({ dimThinkingText: value === "on" });
-					thinkingDimSetting.description = config.dimThinkingText
-						? "Thinking text uses the theme's dim color."
-						: "Keep the default thinking text color.";
-					break;
 				case "stickyUserMessage": {
 					updateConfig({ stickyUserMessage: value === "on" });
 					stickyUserMessageSetting.description = config.stickyUserMessage
 						? "Fullscreen: pin a user message's first line once it scrolls off the top edge, until the next one takes over."
 						: "User messages scroll normally.";
+					break;
+				}
+				case "scrollButtonMode": {
+					updateConfig({ scrollButtonMode: value as ScrollButtonMode });
+					scrollButtonSetting.description =
+						config.scrollButtonMode === "dock"
+							? "Fullscreen: show the extension's dedicated Back to bottom row."
+							: "Fullscreen: show the same Back to bottom text in Pi's native floating overlay.";
 					break;
 				}
 				case "showStartupHeader": {
@@ -1023,6 +1057,7 @@ export async function showCcstylePanel(
 					agentSummaryToggle.setting,
 					workingMessageToggle.setting,
 					aliasesToggle.setting,
+					markdownEnhanceToggle.setting,
 				],
 			},
 			{
@@ -1032,10 +1067,11 @@ export async function showCcstylePanel(
 					expandedInputSetting,
 					expandedOutputSetting,
 					expandedMaxSetting,
-					expandedCardBgSetting,
 					toolLabelClipSetting,
 					stickyUserMessageSetting,
+					scrollButtonSetting,
 					startupHeaderSetting,
+					editorPrefixSetting,
 				],
 			},
 			{
@@ -1053,12 +1089,7 @@ export async function showCcstylePanel(
 			{
 				id: "thinking",
 				label: "Thinking",
-				items: [
-					thinkingTitleSetting,
-					thinkingPreviewSetting,
-					thinkingAnimationSetting,
-					thinkingDimSetting,
-				],
+				items: [thinkingTitleSetting, thinkingPreviewSetting, thinkingAnimationSetting],
 			},
 			{
 				id: "footer",
@@ -1067,6 +1098,7 @@ export async function showCcstylePanel(
 					customFooterSetting,
 					footerTokenRateSetting,
 					footerTokenRateModeSetting,
+					footerTokenRateTtftSetting,
 					footerCurrencySetting,
 					footerCurrencyRateSetting,
 					footerNerdIconsSetting,

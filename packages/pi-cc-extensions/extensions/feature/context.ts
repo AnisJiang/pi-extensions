@@ -3,18 +3,21 @@ import {
 	type ExtensionAPI,
 	type ExtensionCommandContext,
 	type ToolInfo,
+	copyToClipboard,
 	estimateTokens,
 	formatSkillsForPrompt,
 	getMarkdownTheme,
 } from "@earendil-works/pi-coding-agent";
 import { Key, Markdown, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
-import { mouseBaseButton, parseSgrMousePacket } from "../utils/sgr-mouse.ts";
+import { type Color, rgbColor } from "@earendil-works/pi-tui";
 import { padLine } from "../utils/format.ts";
+import { mouseBaseButton, parseSgrMousePacket } from "../utils/sgr-mouse.ts";
 
 export type ContextPart = {
 	label: string;
 	tokens: number;
-	color: "accent" | "success" | "warning" | "customMessageLabel" | "muted" | "dim" | "error";
+	/** 固定 RGB 色值，不走主题 token——避免不同主题撞色。渲染用 theme.style({fg: color})。 */
+	color: Color;
 };
 
 type PreviewKey =
@@ -31,6 +34,61 @@ type ContextPreview = {
 	title: string;
 	content: string;
 };
+
+/** Pi 居中 overlay 的屏幕起点。没有 renderedOverlayLayouts 时用它，避免把 1-based 屏幕坐标当局部坐标。 */
+function centeredOverlayOrigin(
+	tui: any,
+	margin: number,
+	maxHeightPercent: number,
+	width: number,
+	height: number,
+) {
+	const termWidth = Math.max(1, tui.terminal?.columns ?? 80);
+	const termHeight = Math.max(1, tui.terminal?.rows ?? 24);
+	const availWidth = Math.max(1, termWidth - margin * 2);
+	const availHeight = Math.max(1, termHeight - margin * 2);
+	const maxHeight = Math.max(
+		1,
+		Math.min(Math.floor((termHeight * maxHeightPercent) / 100), availHeight),
+	);
+	const effectiveHeight = Math.min(height, maxHeight);
+	return {
+		col: Math.max(
+			margin,
+			Math.min(margin + Math.floor((availWidth - width) / 2), termWidth - margin - width),
+		),
+		row: Math.max(
+			margin,
+			Math.min(
+				margin + Math.floor((availHeight - effectiveHeight) / 2),
+				termHeight - margin - effectiveHeight,
+			),
+		),
+	};
+}
+
+function localMouseFromSgr(
+	tui: any,
+	mouse: { code: number; col: number; row: number; final: "M" | "m" },
+	fallback: { col: number; row: number },
+) {
+	// 用焦点组件自己的布局。取最上层会在多个 overlay 叠放时把下层的点击算偏。
+	const layouts = Array.isArray(tui.renderedOverlayLayouts) ? tui.renderedOverlayLayouts : [];
+	const focused = tui.focusedComponent;
+	const layout =
+		layouts.findLast((candidate: { entry?: { component?: unknown } }) =>
+			focused ? candidate.entry?.component === focused : false,
+		) ??
+		(focused ? undefined : layouts.at(-1)) ??
+		fallback;
+	return {
+		col: mouse.col - 1 - layout.col,
+		row: mouse.row - 1 - layout.row,
+		release: mouse.final === "m",
+		motion: (mouse.code & 32) !== 0,
+		baseButton: mouseBaseButton(mouse.code),
+	};
+}
 
 function normalizePreviewText(text: string): string {
 	return text
@@ -51,6 +109,30 @@ export function escCloseHitbox(bounds: DialogBounds): {
 		row: bounds.top + 2,
 		startCol: bounds.left + bounds.width - 5,
 		endCol: bounds.left + bounds.width - 1,
+	};
+}
+
+const COPY_LABEL = "[copy]";
+const ESC_LABEL = "[esc]";
+
+/** 测试可替换；生产使用 pi 的剪贴板实现。 */
+let copyTextImpl: (text: string) => Promise<void> = (text) => copyToClipboard(text);
+
+export function setPreviewCopyImpl(impl: ((text: string) => Promise<void>) | null): void {
+	copyTextImpl = impl ?? ((text) => copyToClipboard(text));
+}
+
+/** 1-based terminal hitbox of the [copy] button, one space left of [esc] on the same title row. */
+export function copyButtonHitbox(bounds: DialogBounds): {
+	row: number;
+	startCol: number;
+	endCol: number;
+} {
+	const esc = escCloseHitbox(bounds);
+	return {
+		row: esc.row,
+		startCol: esc.startCol - visibleWidth(COPY_LABEL) - 1,
+		endCol: esc.startCol - 2,
 	};
 }
 
@@ -81,7 +163,10 @@ export async function showTextPreview(
 				let pageSize = 1;
 				let totalLines = 1;
 				let escHovered = false;
+				let copyHovered = false;
+				let scrollbarHovered = false;
 				let escHitbox: { row: number; startCol: number; endCol: number } | undefined;
+				let copyHitbox: { row: number; startCol: number; endCol: number } | undefined;
 				let scrollbarHitbox:
 					| {
 							col: number;
@@ -93,6 +178,7 @@ export async function showTextPreview(
 					  }
 					| undefined;
 				let scrollbarDragOffset: number | null = null;
+				let screenOrigin = { col: 0, row: 0 };
 				const markdownView = new Markdown(content, 0, 0, getMarkdownTheme());
 
 				const scrollTo = (nextOffset: number): void => {
@@ -108,6 +194,30 @@ export async function showTextPreview(
 					tui.requestRender();
 				};
 
+				const setCopyHovered = (hovered: boolean): void => {
+					if (hovered === copyHovered) return;
+					copyHovered = hovered;
+					tui.requestRender();
+				};
+
+				const setScrollbarHovered = (hovered: boolean): void => {
+					if (hovered === scrollbarHovered) return;
+					scrollbarHovered = hovered;
+					tui.requestRender();
+				};
+
+				const copyPreview = (): void => {
+					void copyTextImpl(content)
+						.then(() => {
+							const flash = (tui as { flash?: (message: string) => void }).flash;
+							if (typeof flash === "function") flash("Copied!");
+							else ctx.ui.notify("Copied preview to clipboard", "info");
+						})
+						.catch((error: unknown) => {
+							ctx.ui.notify(error instanceof Error ? error.message : "Copy failed", "error");
+						});
+				};
+
 				const dragScrollbarTo = (mouseRow: number): void => {
 					if (!scrollbarHitbox || scrollbarDragOffset === null) return;
 					const trackSize = scrollbarHitbox.endRow - scrollbarHitbox.startRow + 1;
@@ -121,6 +231,92 @@ export async function showTextPreview(
 							? Math.round((thumbStart / maxThumbStart) * scrollbarHitbox.maxOffset)
 							: 0;
 					scrollTo(nextOffset);
+				};
+
+				/**
+				 * 预览鼠标共用处：1-based 屏幕 col/row + 已解码的按键/动作。
+				 * handleInput（regular 主屏 raw SGR）与 handleMouse（overlay 事件对象）
+				 * 都收在这里，两条链同一套 esc/copy/滚动条/滚轮行为。
+				 * 返回 true 表示这次输入被预览消费。
+				 */
+				const handlePreviewMouse = (args: {
+					col: number;
+					row: number;
+					release: boolean;
+					motion: boolean;
+					/** 基础按键码：0 左键、64/65 滚轮上/下。 */
+					baseButton: number;
+				}): boolean => {
+					const { col, row, release, motion, baseButton } = args;
+					if (release) {
+						scrollbarDragOffset = null;
+						setScrollbarHovered(false);
+						return true;
+					}
+					const overEsc = Boolean(
+						escHitbox &&
+							row === escHitbox.row &&
+							col >= escHitbox.startCol &&
+							col <= escHitbox.endCol,
+					);
+					const overCopy = Boolean(
+						copyHitbox &&
+							row === copyHitbox.row &&
+							col >= copyHitbox.startCol &&
+							col <= copyHitbox.endCol,
+					);
+					setEscHovered(overEsc);
+					setCopyHovered(overCopy);
+					// 拖动中保持 hover：thumb 一直亮，官方 scrollbarDrag 同理。
+					setScrollbarHovered(
+						Boolean(
+							scrollbarHitbox &&
+								col === scrollbarHitbox.col &&
+								row >= scrollbarHitbox.startRow &&
+								row <= scrollbarHitbox.endRow,
+						) || scrollbarDragOffset !== null,
+					);
+					if (baseButton === 0 && !motion) {
+						if (overEsc) {
+							done(undefined);
+							return true;
+						}
+						if (overCopy) {
+							copyPreview();
+							return true;
+						}
+						if (
+							scrollbarHitbox &&
+							col === scrollbarHitbox.col &&
+							row >= scrollbarHitbox.startRow &&
+							row <= scrollbarHitbox.endRow
+						) {
+							const trackRow = row - scrollbarHitbox.startRow;
+							const inThumb =
+								trackRow >= scrollbarHitbox.thumbStart &&
+								trackRow < scrollbarHitbox.thumbStart + scrollbarHitbox.thumbSize;
+							scrollbarDragOffset = inThumb
+								? trackRow - scrollbarHitbox.thumbStart
+								: Math.floor(scrollbarHitbox.thumbSize / 2);
+							dragScrollbarTo(row);
+							return true;
+						}
+					}
+					if (motion && scrollbarDragOffset !== null) {
+						dragScrollbarTo(row);
+						return true;
+					}
+					if (baseButton === 64) {
+						scrollTo(scrollOffset - 3);
+						return true;
+					}
+					if (baseButton === 65) {
+						scrollTo(scrollOffset + 3);
+						return true;
+					}
+					// 预览矩形内但未命中任何控件的包也算预览的：返回 true 让 overlay
+					// 命中它（hit 成立），官方不再往底下的 transcript 分发。
+					return true;
 				};
 
 				return {
@@ -141,53 +337,31 @@ export async function showTextPreview(
 						else {
 							const mouse = parseSgrMousePacket(data);
 							if (!mouse) return;
-							if (mouse.final === "m") {
-								scrollbarDragOffset = null;
-								return;
-							}
-							const overEsc = Boolean(
-								escHitbox &&
-									mouse.row === escHitbox.row &&
-									mouse.col >= escHitbox.startCol &&
-									mouse.col <= escHitbox.endCol,
-							);
-							setEscHovered(overEsc);
-							const button = mouseBaseButton(mouse.code);
-							const motion = (mouse.code & 32) !== 0;
-							if (button === 0 && !motion) {
-								if (overEsc) {
-									done(undefined);
-									return;
-								}
-								if (
-									scrollbarHitbox &&
-									mouse.col === scrollbarHitbox.col &&
-									mouse.row >= scrollbarHitbox.startRow &&
-									mouse.row <= scrollbarHitbox.endRow
-								) {
-									const trackRow = mouse.row - scrollbarHitbox.startRow;
-									const inThumb =
-										trackRow >= scrollbarHitbox.thumbStart &&
-										trackRow < scrollbarHitbox.thumbStart + scrollbarHitbox.thumbSize;
-									scrollbarDragOffset = inThumb
-										? trackRow - scrollbarHitbox.thumbStart
-										: Math.floor(scrollbarHitbox.thumbSize / 2);
-									dragScrollbarTo(mouse.row);
-									return;
-								}
-							}
-							if (motion && scrollbarDragOffset !== null) {
-								dragScrollbarTo(mouse.row);
-								return;
-							}
-							if (button === 64) scrollTo(scrollOffset - 3);
-							else if (button === 65) scrollTo(scrollOffset + 3);
+							handlePreviewMouse(localMouseFromSgr(tui, mouse, screenOrigin));
 						}
+					},
+					// overlay 事件对象路径：官方 dispatchMouseToOverlay 把鼠标派到
+					// handleMouse，event.x/y 是相对弹框左上角的 0-based 局部坐标，
+					// 与 hitbox 同基准，天然对齐官方放置位置。
+					handleMouse(event: any) {
+						// 一次单击 = press + release + 合成 click。动作已在 press 执行，
+						// click 只消费不重复触发（否则 copy/esc 会跑两次）。
+						if (event.type === "click") return { handled: true };
+						const wheelUp = event.type === "wheel" && Number(event.wheelDelta) < 0;
+						const wheelDown = event.type === "wheel" && Number(event.wheelDelta) > 0;
+						handlePreviewMouse({
+							col: Number(event.x),
+							row: Number(event.y),
+							release: event.type === "release",
+							motion: event.type === "move" || event.type === "drag",
+							baseButton: wheelUp ? 64 : wheelDown ? 65 : event.button === "left" ? 0 : -1,
+						});
+						return { handled: true };
 					},
 
 					render(width: number) {
 						const inner = Math.max(1, width - 2);
-						const escWidth = visibleWidth("[esc]");
+						const actionsWidth = visibleWidth(`${COPY_LABEL} ${ESC_LABEL}`);
 						const bodyInner = Math.max(1, inner - 1);
 						const bodyWidth = Math.max(1, bodyInner - 1);
 						const terminalHeight = Math.max(1, tui.terminal.rows);
@@ -201,15 +375,24 @@ export async function showTextPreview(
 						const wrapped = markdownView.render(bodyWidth);
 						totalLines = wrapped.length;
 						scrollOffset = Math.min(scrollOffset, Math.max(0, totalLines - pageSize));
-						// Centered overlay with margin 2: mirror TUI resolveOverlayLayout for anchor "center".
-						const overlayTop = 2 + Math.floor((availableHeight - viewportHeight) / 2);
-						const overlayLeft = Math.floor((Math.max(1, tui.terminal.columns) - width) / 2);
-						escHitbox = escCloseHitbox({ left: overlayLeft, top: overlayTop, width });
+						// hitbox 用弹框局部坐标（0-based）：title 固定第 1 行，esc/copy
+						// 在行尾，滚动条字符在 body 行右 border 内侧（width-2 列）。
+						escHitbox = { row: 1, startCol: width - 6, endCol: width - 2 };
+						copyHitbox = {
+							row: 1,
+							startCol: width - 6 - 1 - visibleWidth(COPY_LABEL),
+							endCol: width - 8,
+						};
 						const visible = wrapped.slice(scrollOffset, scrollOffset + pageSize);
 						const border = (text: string) => theme.fg("border", text);
 						const scrollable = totalLines > pageSize;
+						// thumb 几何对齐官方 getScrollbarGeometry：trackHeight=pageSize、
+						// contentHeight=totalLines，minThumb=min(2,track)，thumb=round(track²/content)。
 						const thumbSize = scrollable
-							? Math.max(1, Math.floor((pageSize * pageSize) / totalLines))
+							? Math.max(
+									Math.min(2, pageSize),
+									Math.min(pageSize, Math.round((pageSize * pageSize) / totalLines)),
+								)
 							: 0;
 						const maxScrollOffset = Math.max(0, totalLines - pageSize);
 						const thumbStart =
@@ -218,9 +401,9 @@ export async function showTextPreview(
 								: 0;
 						scrollbarHitbox = scrollable
 							? {
-									col: overlayLeft + width - 1,
-									startRow: overlayTop + 4,
-									endRow: overlayTop + 3 + pageSize,
+									col: width - 2,
+									startRow: 3,
+									endRow: 2 + pageSize,
 									thumbStart,
 									thumbSize,
 									maxOffset: maxScrollOffset,
@@ -229,7 +412,10 @@ export async function showTextPreview(
 						const scrollbar = (row: number): string => {
 							if (!scrollable) return " ";
 							const inThumb = row >= thumbStart && row < thumbStart + thumbSize;
-							return theme.fg(inThumb ? "accent" : "borderMuted", inThumb ? "█" : "│");
+							// 对齐官方：thumb 常态 ┃、hover/拖动中 █；track 始终 │。
+							const thumbActive = scrollbarHovered || scrollbarDragOffset !== null;
+							if (inThumb) return theme.fg("accent", thumbActive ? "█" : "┃");
+							return theme.fg("borderMuted", "│");
 						};
 						const bodyRows = Array.from({ length: pageSize }, (_, row) => {
 							const line = visible[row] ?? "";
@@ -237,17 +423,18 @@ export async function showTextPreview(
 						});
 						const start = totalLines === 0 ? 0 : scrollOffset + 1;
 						const end = Math.min(totalLines, scrollOffset + pageSize);
-						const status = `${start}-${end} / ${totalLines} lines · ↑↓ PgUp/PgDn Home/End · [esc] close`;
-
-						return [
+						const status = `${start}-${end} / ${totalLines} lines · ↑↓ PgUp/PgDn Home/End`;
+						const lines = [
 							border(`╭${"─".repeat(inner)}╮`),
-							`${border("│")}${padLine(` ${theme.bold(theme.fg("accent", title))}`, inner - escWidth)}${theme.fg(escHovered ? "text" : "muted", "[esc]")}${border("│")}`,
+							`${border("│")}${padLine(` ${theme.bold(theme.fg("accent", title))}`, inner - actionsWidth)}${theme.fg(copyHovered ? "text" : "muted", COPY_LABEL)} ${theme.fg(escHovered ? "text" : "muted", ESC_LABEL)}${border("│")}`,
 							`${border("├")}${border("─".repeat(inner))}${border("┤")}`,
 							...bodyRows,
 							`${border("├")}${border("─".repeat(inner))}${border("┤")}`,
 							`${border("│")}${padLine(theme.fg("dim", ` ${status}`), inner)}${border("│")}`,
 							border(`╰${"─".repeat(inner)}╯`),
 						];
+						screenOrigin = centeredOverlayOrigin(tui, 2, 80, width, lines.length);
+						return lines;
 					},
 				};
 			},
@@ -255,7 +442,7 @@ export async function showTextPreview(
 				overlay: true,
 				overlayOptions: {
 					anchor: "center",
-					width: "85%",
+					width: "80%",
 					minWidth: 50,
 					maxHeight: "80%",
 					margin: 2,
@@ -272,6 +459,23 @@ const tokenEstimate = (value: unknown): number => {
 	const text = typeof value === "string" ? value : JSON.stringify(value);
 	return Math.max(0, Math.ceil(text.length / 4));
 };
+
+/** 只算会进请求正文的 content 和 sections。工具 schema 走 tools 参数，由 Tools definition 单独计一次。 */
+function systemMessageTokens(message: {
+	content?: unknown;
+	sections?: Record<string, string | null> | null;
+}): number {
+	let chars = typeof message.content === "string" ? message.content.length : 0;
+	for (const section of Object.values(message.sections ?? {})) {
+		if (typeof section === "string") chars += section.length;
+	}
+	return Math.ceil(chars / 4);
+}
+
+/** prompt 组装会把 CRLF 归一成 LF，匹配前对齐行尾。 */
+function normalizeLineEndings(text: string): string {
+	return text.replace(/\r\n?/g, "\n");
+}
 
 /** 只统计确实嵌进 system prompt 的片段，避免源文件预览把占用加两遍。 */
 function embeddedTokens(prompt: string, chunk: string): number {
@@ -348,24 +552,24 @@ export function collectContextBreakdown(
 	allTools: ToolInfo[],
 ): ContextBreakdown {
 	const options = (ctx.getSystemPromptOptions?.() ?? {}) as BuildSystemPromptOptions;
-	const systemPrompt = typeof ctx.getSystemPrompt === "function" ? ctx.getSystemPrompt() : "";
 	const selectedTools = new Set(options.selectedTools ?? ["read", "bash", "edit", "write"]);
 	const toolDefinitionPreview: string[] = [];
 	const toolResultPreview: string[] = [];
 	const contextPreview: string[] = [];
+	const systemPromptPreview: string[] = [];
 	let toolDefinitionTokens = 0;
 	let toolResultTokens = 0;
 	let contextTokens = 0;
+	let systemTokens = 0;
 
 	const memoryPreview: string[] = [];
-	let memoryTokens = 0;
-	for (const file of options.contextFiles ?? []) {
-		memoryTokens += embeddedTokens(systemPrompt, file.content);
+	const contextFiles = options.contextFiles ?? [];
+	for (const file of contextFiles) {
 		memoryPreview.push(`## ${file.path}\n\n${previewValue(file.content)}`);
 	}
 
-	const skillsText = formatSkillsForPrompt(options.skills ?? []).trim();
-	const skillsTokens = embeddedTokens(systemPrompt, skillsText);
+	const skills = options.skills ?? [];
+	const skillsText = formatSkillsForPrompt(skills).trim();
 
 	for (const tool of allTools) {
 		if (!selectedTools.has(tool.name)) continue;
@@ -378,21 +582,51 @@ export function collectContextBreakdown(
 		toolDefinitionPreview.push(`## Definition: ${tool.name}\n\n${previewValue(definition)}`);
 	}
 
-	for (const entry of ctx.sessionManager.buildContextEntries()) {
-		if (entry.type === "message") {
-			const message = entry.message;
-			if (message.role === "assistant") {
+	let memoryTokens = 0;
+	let skillsTokens = 0;
+	for (const projected of ctx.sessionManager.buildSessionProjection().entries) {
+		const source = projected.sourceEntry;
+		for (const message of projected.messages) {
+			if (message.role === "system") {
+				systemTokens += systemMessageTokens(message);
+				// Memory / skills 按投影中的实际 section 文本切分，与 system prompt 增量互补、不重不漏。
+				const sections = (message.sections ?? {}) as Record<string, string | null>;
+				const projectContext =
+					typeof sections.project_context === "string"
+						? normalizeLineEndings(sections.project_context)
+						: "";
+				for (const file of contextFiles) {
+					const chunk = `<project_instructions path="${file.path}">\n${normalizeLineEndings(file.content)}\n</project_instructions>`;
+					memoryTokens += embeddedTokens(projectContext, chunk);
+					systemTokens -= embeddedTokens(projectContext, chunk);
+				}
+				const skillsSection =
+					typeof sections.skills === "string" ? normalizeLineEndings(sections.skills) : "";
+				skillsTokens += embeddedTokens(skillsSection, skillsText);
+				systemTokens -= embeddedTokens(skillsSection, skillsText);
+				systemPromptPreview.push(
+					(source.type === "compaction"
+						? "## System prompt snapshot at compaction\n\n"
+						: "## System prompt update\n\n") +
+						previewValue({
+							content: message.content,
+							sections: message.sections,
+							toolsAdded: (message.toolsAdded ?? []).map((tool: { name?: string }) => tool?.name),
+							toolsRemoved: (message.toolsRemoved ?? []).map(
+								(tool: { name?: string }) => tool?.name,
+							),
+						}),
+				);
+			} else if (message.role === "assistant") {
+				contextTokens += estimateTokens(message);
 				for (const block of message.content) {
 					if (block.type === "toolCall") {
-						contextTokens += tokenEstimate(block.name) + tokenEstimate(block.arguments);
 						contextPreview.push(
 							`## Assistant tool call: ${block.name}\n\n${previewValue(block.arguments)}`,
 						);
 					} else if (block.type === "text") {
-						contextTokens += tokenEstimate(block.text);
 						contextPreview.push(`## Assistant\n\n${block.text}`);
 					} else if (block.type === "thinking") {
-						contextTokens += tokenEstimate(block.thinking);
 						contextPreview.push(`## Assistant thinking\n\n${block.thinking}`);
 					}
 				}
@@ -402,8 +636,8 @@ export function collectContextBreakdown(
 					`## Result: ${message.toolName}\n\n${previewValue(message.content)}`,
 				);
 			} else if (message.role === "bashExecution") {
-				toolResultTokens += estimateTokens(message);
-				toolResultPreview.push(
+				contextTokens += estimateTokens(message);
+				contextPreview.push(
 					`## Bash\n\nCommand:\n\n${previewValue(message.command)}\n\nOutput:\n\n${previewValue(message.output)}`,
 				);
 			} else if (message.role === "branchSummary" || message.role === "compactionSummary") {
@@ -413,29 +647,28 @@ export function collectContextBreakdown(
 				contextTokens += estimateTokens(message);
 				contextPreview.push(`## ${message.role}\n\n${previewValue(message.content)}`);
 			}
-		} else if (entry.type === "compaction" || entry.type === "branch_summary") {
-			contextTokens += tokenEstimate(entry.summary);
-			contextPreview.push(
-				`## ${entry.type === "compaction" ? "Compaction" : "Branch summary"}\n\n${entry.summary}`,
-			);
-		} else if (entry.type === "custom_message") {
-			contextTokens += tokenEstimate(entry.content);
-			contextPreview.push(`## Custom: ${entry.customType}\n\n${previewValue(entry.content)}`);
 		}
 	}
 
-	const systemTokens = Math.max(0, tokenEstimate(systemPrompt) - memoryTokens - skillsTokens);
+	systemTokens = Math.max(0, systemTokens);
 	return {
 		parts: [
-			{ label: "System prompt", tokens: systemTokens, color: "accent" },
-			{ label: "Memory", tokens: memoryTokens, color: "error" },
-			{ label: "Skills", tokens: skillsTokens, color: "warning" },
-			{ label: "Tools definition", tokens: toolDefinitionTokens, color: "success" },
-			{ label: "Tool results", tokens: toolResultTokens, color: "customMessageLabel" },
-			{ label: "Context", tokens: contextTokens, color: "warning" },
+			{ label: "System prompt", tokens: systemTokens, color: rgbColor(0x79, 0xc0, 0xff) },
+			{ label: "Memory", tokens: memoryTokens, color: rgbColor(0xff, 0x7b, 0x72) },
+			{ label: "Skills", tokens: skillsTokens, color: rgbColor(0xcb, 0x92, 0x14) },
+			{
+				label: "Tools definition",
+				tokens: toolDefinitionTokens,
+				color: rgbColor(0x37, 0xb3, 0x4a),
+			},
+			{ label: "Tool results", tokens: toolResultTokens, color: rgbColor(0xf7, 0x78, 0xba) },
+			{ label: "Context", tokens: contextTokens, color: rgbColor(0xf0, 0x88, 0x3e) },
 		] satisfies ContextPart[],
 		previews: {
-			systemPrompt: systemPrompt || "No system prompt.",
+			systemPrompt:
+				systemPromptPreview.join("\n\n") ||
+				(typeof ctx.getSystemPrompt === "function" ? ctx.getSystemPrompt() : "") ||
+				"No system prompt.",
 			memoryFiles: memoryPreview.join("\n\n") || "No memory files in context.",
 			skills: skillsText || "No skills in context.",
 			tools: toolDefinitionPreview.join("\n\n") || "No active tool definitions.",
@@ -463,8 +696,8 @@ export default function contextUsageExtension(pi: ExtensionAPI) {
 			const free = Math.max(0, contextWindow - used);
 			const allParts = [
 				...parts,
-				{ label: "Other", tokens: other, color: "muted" as const },
-				{ label: "Free space", tokens: free, color: "dim" as const },
+				{ label: "Other", tokens: other, color: rgbColor(0x92, 0x9e, 0xab) },
+				{ label: "Free space", tokens: free, color: rgbColor(0x76, 0x84, 0x94) },
 			];
 
 			if (ctx.mode !== "tui") {
@@ -538,6 +771,60 @@ export default function contextUsageExtension(pi: ExtensionAPI) {
 							let escHitbox: { row: number; startCol: number; endCol: number } | undefined;
 							let escHovered = false;
 							let hoveredKey: PreviewKey | undefined;
+							let screenOrigin = { col: 0, row: 0 };
+
+							/** context 主弹框鼠标共用处：handleInput（raw SGR）与 handleMouse（overlay
+							 * 事件对象）同一套 hover/选中/关闭行为。返回 true 表示被预览消费。 */
+							const handleDialogMouse = (args: {
+								col: number;
+								row: number;
+								release: boolean;
+								motion: boolean;
+								baseButton: number;
+							}): boolean => {
+								const { col, row, release, motion, baseButton } = args;
+								if (release) return true;
+								if (motion) {
+									const overEsc = Boolean(
+										escHitbox &&
+											row === escHitbox.row &&
+											col >= escHitbox.startCol &&
+											col <= escHitbox.endCol,
+									);
+									const hovered = previewHitboxes.find(
+										(candidate) =>
+											row === candidate.row && col >= candidate.startCol && col <= candidate.endCol,
+									);
+									if (overEsc !== escHovered || hovered?.key !== hoveredKey) {
+										escHovered = overEsc;
+										hoveredKey = hovered?.key;
+										tui.requestRender();
+									}
+									return true;
+								}
+								if (baseButton !== 0) return true;
+								if (
+									escHitbox &&
+									row === escHitbox.row &&
+									col >= escHitbox.startCol &&
+									col <= escHitbox.endCol
+								) {
+									done(undefined);
+									return true;
+								}
+								const hitbox = previewHitboxes.find(
+									(candidate) =>
+										row === candidate.row && col >= candidate.startCol && col <= candidate.endCol,
+								);
+								if (hitbox) {
+									selectedPreviewIndex = Math.max(
+										0,
+										visiblePreviews.findIndex((preview) => preview.key === hitbox.key),
+									);
+									done(hitbox.key);
+								}
+								return true;
+							};
 
 							return {
 								invalidate() {},
@@ -561,53 +848,23 @@ export default function contextUsageExtension(pi: ExtensionAPI) {
 										done(visiblePreviews[selectedPreviewIndex]?.key);
 										return;
 									}
-
 									const mouse = parseSgrMousePacket(data);
-									if (!mouse || mouse.final !== "M") return;
-									if ((mouse.code & 32) !== 0) {
-										// SGR 1003 的无按键 hover code 为 35，不能按左键事件过滤。
-										const overEsc = Boolean(
-											escHitbox &&
-												mouse.row === escHitbox.row &&
-												mouse.col >= escHitbox.startCol &&
-												mouse.col <= escHitbox.endCol,
-										);
-										const hovered = previewHitboxes.find(
-											(candidate) =>
-												mouse.row === candidate.row &&
-												mouse.col >= candidate.startCol &&
-												mouse.col <= candidate.endCol,
-										);
-										if (overEsc !== escHovered || hovered?.key !== hoveredKey) {
-											escHovered = overEsc;
-											hoveredKey = hovered?.key;
-											tui.requestRender();
-										}
-										return;
-									}
-									if (mouseBaseButton(mouse.code) !== 0) return;
-									if (
-										escHitbox &&
-										mouse.row === escHitbox.row &&
-										mouse.col >= escHitbox.startCol &&
-										mouse.col <= escHitbox.endCol
-									) {
-										done(undefined);
-										return;
-									}
-									const hitbox = previewHitboxes.find(
-										(candidate) =>
-											mouse.row === candidate.row &&
-											mouse.col >= candidate.startCol &&
-											mouse.col <= candidate.endCol,
-									);
-									if (hitbox) {
-										selectedPreviewIndex = Math.max(
-											0,
-											visiblePreviews.findIndex((preview) => preview.key === hitbox.key),
-										);
-										done(hitbox.key);
-									}
+									if (!mouse) return;
+									handleDialogMouse(localMouseFromSgr(tui, mouse, screenOrigin));
+								},
+								// overlay 事件对象路径：event.x/y 是弹框局部 0-based 坐标，
+								// 与 hitbox 同基准。click 是 press+release 的合成，动作已在
+								// press 做过，只消费。
+								handleMouse(event: any) {
+									if (event.type === "click") return { handled: true };
+									handleDialogMouse({
+										col: Number(event.x),
+										row: Number(event.y),
+										release: event.type === "release",
+										motion: event.type === "move" || event.type === "drag",
+										baseButton: event.button === "left" ? 0 : -1,
+									});
+									return { handled: true };
 								},
 								render(width: number) {
 									const inner = Math.max(1, width - 2);
@@ -627,7 +884,7 @@ export default function contextUsageExtension(pi: ExtensionAPI) {
 															Math.round((part.tokens / Math.max(1, contextWindow)) * barWidth),
 														);
 											remaining -= cells;
-											return theme.fg(part.color, "█".repeat(Math.max(0, cells)));
+											return theme.style("█".repeat(Math.max(0, cells)), { fg: part.color });
 										})
 										.join("");
 									const labelWidth = Math.min(
@@ -637,7 +894,7 @@ export default function contextUsageExtension(pi: ExtensionAPI) {
 									const selectedLabel = visiblePreviews[selectedPreviewIndex]?.label;
 									const partRows = allParts.map((part) => {
 										const pct = contextWindow > 0 ? (part.tokens / contextWindow) * 100 : 0;
-										const swatch = theme.fg(part.color, "■");
+										const swatch = theme.style("■", { fg: part.color });
 										const label = part.label.padEnd(labelWidth);
 										const amount = `${formatTokens(part.tokens).padStart(7)}  ${pct.toFixed(1).padStart(5)}%`;
 										const selected = part.label === selectedLabel;
@@ -666,10 +923,10 @@ export default function contextUsageExtension(pi: ExtensionAPI) {
 										Math.max(1, terminalHeight - 2),
 									);
 									const visibleHeight = Math.min(lines.length, maxHeight);
-									const overlayTop =
-										1 + Math.floor((Math.max(1, terminalHeight - 2) - visibleHeight) / 2);
-									const overlayLeft = Math.floor((Math.max(1, tui.terminal.columns) - width) / 2);
-									escHitbox = escCloseHitbox({ left: overlayLeft, top: overlayTop, width });
+									// hitbox 用弹框局部坐标（0-based）：esc 在 title 行（第 1 行）
+									// 尾部 │ 前 5 列，preview 行对应 partRows（顶 border=0、title=1、
+									// ├=2、segments=3、空行=4，part 从 5 起）。不依赖官方放置行列。
+									escHitbox = { row: 1, startCol: width - 6, endCol: width - 2 };
 									previewHitboxes = visiblePreviews.flatMap((preview) => {
 										const partIndex = allParts.findIndex((part) => part.label === preview.label);
 										const line = 5 + partIndex;
@@ -677,13 +934,14 @@ export default function contextUsageExtension(pi: ExtensionAPI) {
 											? [
 													{
 														key: preview.key,
-														row: overlayTop + line + 1,
-														startCol: overlayLeft + 1,
-														endCol: overlayLeft + width,
+														row: line,
+														startCol: 0,
+														endCol: width - 1,
 													},
 												]
 											: [];
 									});
+									screenOrigin = centeredOverlayOrigin(tui, 1, 90, width, visibleHeight);
 
 									return lines;
 								},

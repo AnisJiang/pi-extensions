@@ -1,10 +1,4 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { getCompactRunStatusText } from "../../renderer/compact-mode.ts";
-import {
-	fullscreenLazyTui,
-	getToolMouseTui,
-	isFullscreenAtBottom,
-} from "../../renderer/mouse/scroll.ts";
 import { formatDuration, formatTokenCount } from "../../utils/format.ts";
 import {
 	resetTokenRate,
@@ -55,28 +49,15 @@ export default function (pi: ExtensionAPI): void {
 		return totalTokens();
 	}
 
-	function updateProviderUsage(message: StreamMessage): void {
+	function updateProviderUsage(message: StreamMessage, final = false): void {
 		const output = outputUsage(message);
-		if (output > 0) recordProviderUsage(output);
-	}
-
-	/**
-	 * 摘要行滚出视口才镜像：仅 fullscreen 且已离开 transcript 底部。
-	 * regular 没有“离开底部”信号（transcript 在终端回滚区），保持 Pi 默认文案。
-	 */
-	function compactMirrorText(): string | undefined {
-		const tui = getToolMouseTui();
-		if (!tui || !fullscreenLazyTui(tui) || isFullscreenAtBottom(tui)) return undefined;
-		return getCompactRunStatusText();
+		if (output > 0) recordProviderUsage(output, Date.now(), final);
 	}
 
 	function buildWorkingMessage(): string {
 		const parts: string[] = [];
 		const tokens = tokenCount();
 		if (tokens > 0) parts.push(`↓ ${formatTokenCount(tokens)} tokens`);
-		// compact 活动回合且已滚出摘要行：直接用摘要行文案（自带回合时长，不叠 agent 计时）。
-		const compactStatus = compactMirrorText();
-		if (compactStatus) return [compactStatus, ...parts].join(" · ");
 		const elapsed = Date.now() - (agentStartTime || turnStartTime);
 		if (elapsed >= SHOW_TIMER_AFTER_MS || tokens > 0) {
 			// formatDuration 低于 1 秒返回 ""，此处回退 "0s" 保持计时器连续跳动。
@@ -190,13 +171,20 @@ export default function (pi: ExtensionAPI): void {
 			// 分段锚点只在 turn_start 重置。这里再重置会把累计 usage.output 当成新的首报。
 			markFirstToken();
 			updateProviderUsage(evt.partial);
-		} else if (evt.type === "thinking_delta" || evt.type === "text_delta") {
+		} else if (
+			evt.type === "thinking_delta" ||
+			evt.type === "text_delta" ||
+			evt.type === "toolcall_delta"
+		) {
+			// 工具参数走 toolcall_delta；不计入的话，写长文件这类调用期间 token 一直不涨。
 			if (typeof evt.delta === "string") sampleTokenDelta(evt.delta);
 			updateProviderUsage(evt.partial);
 		} else if (evt.type === "text_end" || evt.type === "thinking_end") {
 			updateProviderUsage(evt.partial);
 		} else if (evt.type === "done") {
-			updateProviderUsage(evt.message);
+			// Pi 目前不会把 done/error 转成 message_update，定格在下面的 message_end 里做。
+			// 这两个分支只在宿主直接转发 done/error 时生效；同一个值重复定格不改变结果。
+			updateProviderUsage(evt.message, true);
 		} else if (evt.type === "error") {
 			updateProviderUsage(evt.error);
 		} else {
@@ -205,6 +193,18 @@ export default function (pi: ExtensionAPI): void {
 
 		syncWorkingMessage();
 		scheduleRefreshTick();
+	});
+
+	// message_delta 的累计 usage 只出现在 message_end 上，含未逐字流出的思考 token。
+	// message_end 在工具执行和 turn_end 之前，先于 carryTokenRate 结转。
+	pi.on("message_end", async (event, ctx) => {
+		const message = event?.message;
+		if (message?.role !== "assistant") return;
+		activeCtx = ctx;
+		// 出错/中断时 usage 可能还是 message_start 的占位值，只接受变大的值。
+		const failed = message.stopReason === "error" || message.stopReason === "aborted";
+		updateProviderUsage(message, !failed);
+		syncWorkingMessage();
 	});
 
 	pi.on("tool_execution_start", async () => {

@@ -43,7 +43,7 @@ import {
   stoppedStatusLabel,
   transitionGoal,
   validateObjective
-} from "./chunks/chunk-2QCUPHK5.ts";
+} from "./chunks/chunk-4YQBUXZ4.ts";
 import {
   DEFAULT_GOAL_SETTINGS,
   currentTokenTotal,
@@ -63,7 +63,7 @@ import {
 
 // src/command-registration.ts
 function registerGoalCommand(pi, runtime, commands, options = {}) {
-  const loadGoalManager = cachedModuleLoader(options.loadGoalManager ?? (() => import("./chunks/menu-COOPZZLU.ts")));
+  const loadGoalManager = cachedModuleLoader(options.loadGoalManager ?? (() => import("./chunks/menu-EGSDZGF6.ts")));
   const loadGoalSettings = cachedModuleLoader(options.loadGoalSettings ?? (() => import("./chunks/settings-ui-T77VFPTK.ts")));
   pi.registerCommand("goal", {
     description: "Run a goal to completion: /goal [--tokens 100k] <goal_to_complete>",
@@ -857,7 +857,7 @@ function registerGoalLifecycle(pi, runtime, runController, options = {}) {
     if (!runtime.goalToolsAvailable()) runtime.pauseGoalForUnavailableTools(ctx);
   });
   pi.on("before_agent_start", (event, ctx) => {
-    if (!sessionActive) return;
+    if (!sessionActive || event.messageType === "custom") return;
     runtime.clearAgentRun();
     if (runtime.guardAbortGoalId) runtime.guardAbortGoalId = void 0;
     const goalPrompt = runtime.consumeOwnedGoalPrompt(event.prompt);

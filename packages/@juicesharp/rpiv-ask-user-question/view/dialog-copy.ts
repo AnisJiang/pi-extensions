@@ -1,4 +1,4 @@
-import { DEFAULT_COLLAPSE_KEY, formatKeySpecForDisplay } from "../config.js";
+import { DEFAULT_COLLAPSE_KEY, formatKeySpecForDisplay } from "../config.ts";
 
 /** Leaf: imports nothing from `view/`, so `dialog-builder` and `tab-content-strategy` never form a runtime cycle (#208). */
 
